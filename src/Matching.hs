@@ -40,4 +40,3 @@ dPair f1@(Func n as) f2@(Func n2 bs) = if n == n2
 dPair (Op a opl b) (Op d opr e) = msum [dPair a d,dPair b e]
 dPair a b = Just (a,b)
 
-ca
