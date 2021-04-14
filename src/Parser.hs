@@ -71,8 +71,9 @@ func = do
 
 
 data Option = Unify Exp Exp |
-              Match Exp Exp deriving (Show) 
-              
+              Match Exp Exp |
+              Error  deriving (Show)
+
 parser :: ReadS Option
 parser = readP_to_S $ do
     option <- munch1 isValidChar 
@@ -81,6 +82,7 @@ parser = readP_to_S $ do
                         (0,expr <* char ',' ,expr)
                     "match" -> 
                         (1,expr <* char ',', expr)
+                    _ -> (-1,expr <* char ',',expr)
 
     e1 <- arg1 
     e2 <- arg2 
@@ -88,5 +90,6 @@ parser = readP_to_S $ do
     end <- eof
     return  (case o of 
                 0 -> Unify e1 e2
-                1 -> Match e1 e2)
+                1 -> Match e1 e2
+                -1 -> Error)
 
