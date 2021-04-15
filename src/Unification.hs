@@ -33,4 +33,4 @@ occurs (Var a) (Lit b) = False
 occurs (Var a) (Var b) = a == b
 occurs (Var a) (Func f xs) =  any (occurs (Var a)) xs
 occurs (Var a) (Op l op r) = occurs (Var a) l || occurs (Var a) r
-
+occurs (Var a) (UnOp op e) = occurs (Var a) e
