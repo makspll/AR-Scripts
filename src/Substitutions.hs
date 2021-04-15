@@ -13,7 +13,7 @@ sub (t :\: Var s) (Var a)
 sub s (Lit a) = Lit a
 sub s (Func a xs) = Func a (map (sub s) xs)
 sub s (Op a op b) = Op (sub s a) op (sub s b)
-
+sub s (UnOp op a) = UnOp op (sub s a)
 
 
 subSet :: Set.Set Sub -> Exp -> Exp
