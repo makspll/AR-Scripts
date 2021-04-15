@@ -1,6 +1,6 @@
 import System.Directory.Internal.Prelude (getArgs)
 import Data.List.Split ( splitOn )
-import Parser ( Option(Unify,Match), parser)
+import Common ( Option(Unify,Match), parser)
 import Unification(unify)
 import Matching(match)
 import Text.Printf (printf)
