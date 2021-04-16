@@ -8,6 +8,7 @@ import qualified Data.Set.Internal as Data
 
 import Debug.Trace ( trace, traceShow )
 import Text.Printf (printf)
+import Matching (match)
 
 
 traced :: String -> a -> a
@@ -18,25 +19,42 @@ data Rule =  Exp :=>: Exp
 
 
 
+dfsFold :: (Int -> Exp -> c -> c) -> c -> Exp -> c
+dfsFold f b e = snd (dfsFold' f e (0,b))
 
+dfsFold' :: (Int -> Exp -> b -> b) -> Exp -> (Int,b) -> (Int,b)
+dfsFold' f e@(Var a) (idx,accum) = (idx,f idx e accum)
+dfsFold' f e@(Lit a) (idx,accum) = (idx,f idx e accum)
+dfsFold' f e@(Func a bs) (idx,accum) = foldl (\res ne -> dfsFold' f ne (fst res + 1,snd res)) (idx, f idx e accum) bs
+dfsFold' f e@(Op a op b) (idx,accum) = foldl (\res ne -> dfsFold' f ne (fst res + 1,snd res)) (idx, f idx e accum) [a,b]
+dfsFold' f e@(UnOp op a) (idx,accum) = foldl (\res ne -> dfsFold' f ne (fst res + 1,snd res)) (idx, f idx e accum) [a]
+
+dfsReplace :: (Int -> Exp -> Exp) -> Exp -> Exp
+dfsReplace f e = snd (dfsReplace' f e 0)
+
+dfsReplace' :: (Int -> Exp -> Exp) -> Exp -> Int -> (Int, Exp)
+dfsReplace' f e@(Var a) idx = (idx, f idx e)
+dfsReplace' f e@(Lit a) idx = (idx, f idx e)
+dfsReplace' f e@(Func a bs) idx = let
+                                    chlrden = foldl (\res ne -> res ++ [dfsReplace' f ne (firstIdxb res idx+ 1)] ) [] bs
+                                    chldren_exps = map snd chlrden
+                                    in (fst.last $ chlrden, f idx $ Func a chldren_exps )
+dfsReplace' f e@(Op a op b) idx = let
+                                    chlrden = foldl (\res ne -> res ++ [dfsReplace' f ne (firstIdxb res idx+ 1)] ) [] [a,b]
+                                    chldren_exps = map snd chlrden
+                                    in (fst.last $ chlrden, f idx $ Op (head chldren_exps) op (last chldren_exps))
+dfsReplace' f e@(UnOp op a) idx = let
+                                    chlrden = foldl (\res ne -> res ++ [dfsReplace' f ne (firstIdxb res idx+ 1)] ) [] [a]
+                                    chldren_exps = map snd chlrden
+                                    in (fst.last $ chlrden, f idx $ UnOp op (head chldren_exps) )
 
 subexpressions :: Exp -> [(Int, Exp)]
-subexpressions = sortOn fst.subexpressions' [] 0
-
-subexpressions' :: [(Int, Exp)] -> Int -> Exp  -> [(Int, Exp)]
-subexpressions' xs idx (Var a) = (idx, Var a) : xs
-subexpressions' xs idx (Lit a) = (idx, Lit a) : xs
-subexpressions' xs idx f1@(Func a bs) = foldl (\res ne-> subexpressions' res (lastIdx res + 1) ne) ((idx,f1) : xs) bs
-subexpressions' xs idx (Op a op b) = let
-                                        lhs = subexpressions' ((idx, Op a op b) : xs) (idx + 1) a
-                                        rhs = subexpressions' xs (lastIdx lhs + 1) b
-                                        in lhs ++ rhs
-subexpressions' xs idx (UnOp op a) = subexpressions' ((idx, UnOp op a) : xs) (idx + 1) a
+subexpressions = sortOn fst.dfsFold (\i e a -> (i,e):a) []
 
 lastIdx :: [(Int, a)] -> Int
 lastIdx = fst.head
 
-firstIdx :: [(Int, a)] -> Int 
+firstIdx :: [(Int, a)] -> Int
 firstIdx = fst.last
 
 lastIdxb :: [(Int, a)] -> Int -> Int
@@ -44,47 +62,25 @@ lastIdxb [] b = b
 lastIdxb xs _ = lastIdx xs
 
 firstIdxb :: [(Int, a)] -> Int -> Int
-firstIdxb [] b = b 
-firstIdxb xs _ = firstIdx xs 
-
-applyRule :: Rule -> Data.Set Sub-> Int -> Exp -> Exp
-applyRule r subs idx a = snd $ applyRule' r subs idx  0 a
+firstIdxb [] b = b
+firstIdxb xs _ = firstIdx xs
 
 
-applyRule' :: Rule -> Data.Set Sub -> Int -> Int -> Exp -> (Int,Exp)
-applyRule' (l :=>: r) subs it idx (Var a)
-    | it == idx = (idx,subSet subs r)
-    | otherwise = (idx,Var a)
-applyRule' (l :=>: r) subs it idx (Lit a)
-    | it == idx =  (idx,subSet subs r)
-    | otherwise =  (idx,Lit a)
-applyRule' rule@(l :=>: r) subs it idx f1@(Func a xs)
-    | it == idx = (idx,subSet subs r)
-    | otherwise =
-            let
-                folder :: [(Int,Exp)] -> Exp -> [(Int,Exp)]
-                folder acum newE = acum ++ [applyRule' rule subs it (firstIdxb acum idx + 1) newE]
-                result = foldl folder [] xs
-                in (firstIdx result,Func a (map snd result))
+applyRule :: Rule -> Data.Set Sub -> Int -> Exp -> Exp
+applyRule r subs location = dfsReplace $ applyRule' r subs location
 
-applyRule' rule@(l :=>: r) subs it idx (UnOp op a)
-    | it == idx = (idx,subSet subs r)
-    | otherwise = let
-                    (i, result) = applyRule' rule subs it (idx + 1) a
-                  in (idx, UnOp op result)
-
-applyRule' rule@(l :=>: r) subs it idx (Op a op b)
-    | it == idx = (idx,subSet subs r)
-    | otherwise = let
-                    (lidx, lhs) = applyRule' rule subs it (idx + 1) a
-                    (ridx, rhs) = applyRule' rule subs it (lidx + 1) b
-                  in (ridx, Op lhs op rhs)
+applyRule' :: Rule -> Data.Set Sub -> Int -> Int -> Exp -> Exp
+applyRule' (l :=>: r) subs location idx e@(Var a) = if idx == location then subSet subs r else e
+applyRule' (l :=>: r) subs location idx e@(Lit a) = if idx == location then subSet subs r else e
+applyRule' (l :=>: r) subs location idx e@(Func a bs) = if idx == location then subSet subs r else e
+applyRule' (l :=>: r) subs location idx e@(Op a op b) = if idx == location then subSet subs r else e
+applyRule' (l :=>: r) subs location idx e@(UnOp op a) = if idx == location then subSet subs r else e
 
 
 
 occurrences :: Rule -> Exp -> [(Int,Data.Set Sub,Exp)]
 occurrences  (l :=>: r) exp = let
                                 subs = subexpressions exp
-                                matches = map (\x -> (fst x,unify l (snd x),snd x) ) subs
+                                matches = map (\x -> (fst x,match l (snd x),snd x) ) subs
                               in [(i,fromJust s,e) | (i,s,e) <- matches, isJust s]
 
