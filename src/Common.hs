@@ -6,7 +6,8 @@ import Data.Char (isAlpha, isUpper, isLower, isAlphaNum, isNumber)
 import Control.Applicative ((<|>), Alternative (many))
 import Data.Functor ( ($>) )
 
-data Exp = Var String |
+data Exp =  None |
+            Var String |
              Lit String |
              Func String [Exp]|
              Op Exp String Exp |
@@ -91,9 +92,19 @@ var = Var <$> varIdentifier
 
 lit = Lit <$> literalIdentifier
 
+varSep :: ReadP Char
+varSep = do 
+    _ <- skipSpaces
+    sep <- char ','
+    _ <- skipSpaces 
+    return sep 
+    
 func = do
     name <- literalIdentifier
-    args <- between (char '(') (char ')') (sepBy expr (char ','))
+    args <- between (char '(') (char ')') (sepBy expr varSep) 
+                <|>
+            between (char '(') (char ')') varSep $> []
+
     return (Func name args)
 
 

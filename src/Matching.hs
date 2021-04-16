@@ -1,6 +1,6 @@
-module Matching where 
-    
-import Substitutions ( Sub(..), sub, mergeSub ) 
+module Matching where
+
+import Substitutions ( Sub(..), sub, mergeSub )
 import Common ( Exp(..) )
 import qualified Data.Set as Set
 import Control.Monad ( msum )
@@ -33,9 +33,11 @@ dPair (Var a) (Var b)
 dPair (Lit a) (Lit b)
     | a == b =  Nothing
     | otherwise = Just (Lit a,Lit b)
-dPair f1@(Func n as) f2@(Func n2 bs) = if n == n2 
-                                        then msum $ zipWith dPair as bs 
-                                        else Just (f1,f2)
+dPair f1@(Func n as) f2@(Func n2 bs)
+    | n == n2 && length as == length bs = msum $ zipWith dPair as bs
+    | n == n2 && length as > length bs = msum $ zipWith dPair as bs ++ [Just (as !! (length bs - 1),None)]
+    | n == n2 && length as < length bs = msum $ zipWith dPair as bs ++ [Just (None,bs !! (length as - 1) )]
+    | otherwise = Just (f1,f2)
 
 dPair (Op a opl b) (Op d opr e) = msum [dPair a d,dPair b e]
 dPair (UnOp opl l) (UnOp  opr r) = dPair l r
