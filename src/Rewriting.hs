@@ -1,6 +1,6 @@
 module Rewriting where
-import Common (Exp (Var, Lit, Func, Op, UnOp))
-import Data.List ( sortOn )
+import Common (Exp (Var, Lit, Func, Op, UnOp, None))
+import Data.List ( sortOn, delete, mapAccumL, nub )
 import Unification (unify)
 import Data.Maybe (isJust, fromJust, catMaybes, mapMaybe)
 import Substitutions (Sub(..), subSet)
@@ -51,6 +51,9 @@ dfsReplace' f e@(UnOp op a) idx = let
 subexpressions :: Exp -> [(Int, Exp)]
 subexpressions = sortOn fst.dfsFold (\i e a -> (i,e):a) []
 
+
+
+
 lastIdx :: [(Int, a)] -> Int
 lastIdx = fst.head
 
@@ -66,8 +69,8 @@ firstIdxb [] b = b
 firstIdxb xs _ = firstIdx xs
 
 
-applyRule :: Rule -> Data.Set Sub -> Int -> Exp -> Exp
-applyRule r subs location = dfsReplace $ applyRule' r subs location
+applyRule :: Int -> Rule -> Data.Set Sub  -> Exp -> Exp
+applyRule location r subs = dfsReplace $ applyRule' r subs location
 
 applyRule' :: Rule -> Data.Set Sub -> Int -> Int -> Exp -> Exp
 applyRule' (l :=>: r) subs location idx e@(Var a) = if idx == location then subSet subs r else e
@@ -77,10 +80,53 @@ applyRule' (l :=>: r) subs location idx e@(Op a op b) = if idx == location then 
 applyRule' (l :=>: r) subs location idx e@(UnOp op a) = if idx == location then subSet subs r else e
 
 
-
-occurrences :: Rule -> Exp -> [(Int,Data.Set Sub,Exp)]
-occurrences  (l :=>: r) exp = let
+occurrences :: Rule -> Exp -> [(Int,Rule,Data.Set Sub)]
+occurrences  rule@(l :=>: r) exp = let
                                 subs = subexpressions exp
                                 matches = map (\x -> (fst x,match l (snd x),snd x) ) subs
-                              in [(i,fromJust s,e) | (i,s,e) <- matches, isJust s]
+                              in [(i,rule,fromJust s) | (i,s,e) <- matches, isJust s]
 
+
+
+
+fst3 (a,b,c) = a
+
+replaceNth :: Int -> a -> [a] -> [a]
+replaceNth _ _ [] = []
+replaceNth n newVal (x:xs)
+    | n == 0 = newVal:xs
+    | otherwise = x:replaceNth (n-1) newVal xs
+
+deleteAt :: Int -> [a] -> [a]
+deleteAt idx xs = lft ++ rgt
+  where (lft, _:rgt) = splitAt idx xs
+
+-- DFS order based heuristic
+heuristic :: [(Int,Rule, Data.Set Sub)] -> [(Int, Rule, Data.Set Sub)]
+heuristic = sortOn fst3
+
+
+
+allOccurrences :: [Rule] -> Exp -> [(Int,Rule, Data.Set Sub)]
+allOccurrences rules e = foldl1 (++) $ map (`occurrences` e) rules
+
+reduceToNormal :: [Rule] -> Exp -> [Exp]
+reduceToNormal r e= nub (reduceToNormal' r e)
+
+reduceToNormal' :: [Rule] -> Exp -> [Exp]
+reduceToNormal' rules e =
+        let
+            applyRule3 (a,b,c) = applyRule a b c
+            choices = allOccurrences rules e
+        in
+        case choices of
+            [] -> [e]
+            _ -> foldl (\acc n ->acc ++ reduceToNormal' rules (applyRule3 n e)) [] (heuristic choices)
+
+
+
+factor1 :: Rule
+factor1 = Op (Var "X") "&" (Op (Var "Y") "|" (Var "Z")) :=>: Op (Op (Var "X") "&" (Var "Y")) "|" (Op (Var "X") "&" (Var "Z"))
+
+demoivre :: Rule
+demoivre =UnOp "-" (Op (Var "X") "&" (Var "Y")):=>: Op (UnOp "-" (Var "X")) "|" (UnOp "-" (Var "Y"))
