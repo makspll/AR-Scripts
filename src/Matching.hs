@@ -39,8 +39,11 @@ dPair f1@(Func n as) f2@(Func n2 bs)
     | n == n2 && length as < length bs = msum $ zipWith dPair as bs ++ [Just (None,bs !! (length as - 1) )]
     | otherwise = Just (f1,f2)
 
-dPair (Op a opl b) (Op d opr e) = msum [dPair a d,dPair b e]
-dPair (UnOp opl l) (UnOp  opr r) = dPair l r
-
+dPair ol@(Op a opl b) or@(Op d opr e)
+    | opl == opr = msum [dPair a d,dPair b e]
+    | otherwise = Just (ol,or)
+dPair ol@(UnOp opl l) or@(UnOp  opr r)
+    | opl == opr = dPair l r
+    | otherwise = Just (ol,or)
 dPair a b = Just (a,b)
 
