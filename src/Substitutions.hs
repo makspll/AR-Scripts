@@ -43,7 +43,6 @@ nubSub = Set.filter (\( t :\: b) -> t /= b )
 
 
 
-
 getVar :: Sub -> Exp
 getVar (a :\: b) = b
 
