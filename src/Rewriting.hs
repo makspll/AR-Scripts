@@ -3,12 +3,14 @@ import Common (Exp (Var, Lit, Func, Op, UnOp, None))
 import Data.List ( sortOn, delete, mapAccumL, nub )
 import Unification (unify)
 import Data.Maybe (isJust, fromJust, catMaybes, mapMaybe)
-import Substitutions (Sub(..), subSet)
+import Substitutions (Sub(..), subSet, sub, renameSubs)
 import qualified Data.Set.Internal as Data
 
 import Debug.Trace ( trace, traceShow )
 import Text.Printf (printf)
 import Matching (match)
+import Data.Char (isDigit)
+import qualified Data.Ord
 
 
 traced :: String -> a -> a
@@ -69,8 +71,29 @@ firstIdxb [] b = b
 firstIdxb xs _ = firstIdx xs
 
 
-applyRule :: Int -> Rule -> Data.Set Sub  -> Exp -> Exp
-applyRule location r subs = dfsReplace $ applyRule' r subs location
+
+type RuleOccurrence = (Int,Rule,Data.Set Sub)
+
+
+-- finds occurence of rule in the given expression given the matching/unification process, excluding certain subexpressions based on filter
+ruleOccurrencesWith :: Rule -> Exp -> (Exp -> Exp -> Maybe(Data.Set Sub)) -> (Int -> Exp -> Bool) -> [RuleOccurrence]
+ruleOccurrencesWith  rule@(lo :=>: ro) exp f filter = let
+                                subexps = subexpressions exp
+                                standardizationSub =  standardizeVariables lo exp
+                                srule@(l :=>: r) = subSet standardizationSub lo :=>: subSet standardizationSub ro
+                                matches = map (\x -> (fst x,f l (snd x),snd x) ) subexps
+                              in [(i,srule, fromJust s ) | (i,s,e) <- matches, isJust s, filter i e]
+
+
+occurrences :: Rule -> Exp -> [RuleOccurrence]
+occurrences  r exp = ruleOccurrencesWith r exp match (\i e -> True)
+
+allOccurrences :: [Rule] -> Exp -> [RuleOccurrence]
+allOccurrences rules e = foldl1 (++) $ map (`occurrences` e) rules
+
+
+applyRule :: RuleOccurrence  -> Exp -> Exp
+applyRule (location, r, subs) = dfsReplace $ applyRule' r subs location
 
 applyRule' :: Rule -> Data.Set Sub -> Int -> Int -> Exp -> Exp
 applyRule' (l :=>: r) subs location idx e@(Var a) = if idx == location then subSet subs r else e
@@ -80,16 +103,7 @@ applyRule' (l :=>: r) subs location idx e@(Op a op b) = if idx == location then 
 applyRule' (l :=>: r) subs location idx e@(UnOp op a) = if idx == location then subSet subs r else e
 
 
-occurrences :: Rule -> Exp -> [(Int,Rule,Data.Set Sub)]
-occurrences  rule@(l :=>: r) exp = let
-                                subs = subexpressions exp
-                                matches = map (\x -> (fst x,match l (snd x),snd x) ) subs
-                              in [(i,rule,fromJust s) | (i,s,e) <- matches, isJust s]
 
-
-
-
-fst3 (a,b,c) = a
 
 replaceNth :: Int -> a -> [a] -> [a]
 replaceNth _ _ [] = []
@@ -102,13 +116,11 @@ deleteAt idx xs = lft ++ rgt
   where (lft, _:rgt) = splitAt idx xs
 
 -- DFS order based heuristic
-heuristic :: [(Int,Rule, Data.Set Sub)] -> [(Int, Rule, Data.Set Sub)]
-heuristic = sortOn fst3
+heuristic :: [RuleOccurrence] -> [RuleOccurrence]
+heuristic = sortOn (\(a,b,c) -> a)
 
 
 
-allOccurrences :: [Rule] -> Exp -> [(Int,Rule, Data.Set Sub)]
-allOccurrences rules e = foldl1 (++) $ map (`occurrences` e) rules
 
 reduceToNormal :: [Rule] -> Exp -> [Exp]
 reduceToNormal r e= nub (reduceToNormal' r e)
@@ -116,17 +128,102 @@ reduceToNormal r e= nub (reduceToNormal' r e)
 reduceToNormal' :: [Rule] -> Exp -> [Exp]
 reduceToNormal' rules e =
         let
-            applyRule3 (a,b,c) = applyRule a b c
-            choices = allOccurrences rules e
+            choices =  allOccurrences rules e
         in
         case choices of
             [] -> [e]
-            _ -> foldl (\acc n ->acc ++ reduceToNormal' rules (applyRule3 n e)) [] (heuristic choices)
+            _ -> foldl (\acc n ->  acc ++ reduceToNormal' rules (applyRule n e)) [] (heuristic choices)
 
-
+--traceShow ("<",e,"|||",applyRule3 n e,"|||",n,">") 
 
 factor1 :: Rule
-factor1 = Op (Var "X") "&" (Op (Var "Y") "|" (Var "Z")) :=>: Op (Op (Var "X") "&" (Var "Y")) "|" (Op (Var "X") "&" (Var "Z"))
+factor1 = (read "X & (Y | Z)" :: Exp) :=>:  (read "(X & Y) | (X & Z)" :: Exp)
 
 demoivre :: Rule
-demoivre =UnOp "-" (Op (Var "X") "&" (Var "Y")):=>: Op (UnOp "-" (Var "X")) "|" (UnOp "-" (Var "Y"))
+demoivre = (read "-(X & Y)" :: Exp) :=>: (read "-X | -Y" :: Exp)
+
+power :: Rule 
+power = (read "X^0" :: Exp) :=>: (read "1" :: Exp)
+
+power2 :: Rule 
+power2 = (read "0^X" :: Exp) :=>: (read "0" :: Exp)
+
+frule :: Rule 
+frule = (read "f(f(X))" :: Exp) :=>: (read "g(X)" :: Exp)
+
+
+getVars :: Exp -> Data.Set Exp
+getVars = dfsFold getVars' (Data.fromList [])
+
+getVars' :: Int -> Exp -> Data.Set Exp -> Data.Set Exp
+getVars' i e a = case e of
+                        (Var n)-> Data.union a (Data.fromList [Var n])
+                        _      -> a
+
+
+variableNames :: Data.Set Exp
+variableNames = Data.fromList $ map (\x -> Var [x]) ['A'..'Z']
+
+extendVariableName :: Exp -> Exp
+extendVariableName (Var a)
+  | isDigit $ last a = Var (init a ++ show ((read [last a] :: Int) + 1))
+  | otherwise = Var (a ++ "1")
+
+standardizeVariables :: Exp -> Exp -> Data.Set Sub
+standardizeVariables source target = Data.fromList $ zipWith (\x y -> y:\:x) varsLList alternativeNames
+    where
+      varsL = getVars source
+      varsLList = Data.toList varsL
+      varsR = getVars target
+      extendedNames = Data.map extendVariableName varsL
+      newNames = variableNames
+      allReplacableNames = Data.union extendedNames newNames
+      intersection = Data.intersection (Data.union varsL allReplacableNames) varsR
+      alternativeNames = sortOn (Data.Ord.Down . (\(Var x) -> x)) (Data.toList $ Data.difference (Data.union variableNames extendedNames) intersection)
+
+
+
+data Critical = Exp :<>: Exp 
+  deriving (Ord)
+
+instance Show Critical where 
+  show (a :<>: b) = "<" ++ show a ++ "," ++ show b ++ ">"
+
+-- commutative equals
+instance Eq Critical where 
+    (a :<>: b) == (c :<>: d) = 
+       a == c && b == d ||
+       a == d && b == c
+
+
+nubCPairs :: [Critical] -> [Critical]
+nubCPairs = nub.filter (\(a:<>:b) -> a /= b)
+
+criticalPairs :: Rule -> Rule -> [Critical]
+criticalPairs ruleL@(l1 :=>: r1 ) ruleR@(l2 :=>: r2) = nubCPairs (lPairs ++ rPairs)
+    where 
+      nonVariable i (Var x) = False 
+      nonVariable i _ = True 
+
+      occurencesLinR = ruleOccurrencesWith ruleL l2 unify nonVariable
+      occurencesRinL = ruleOccurrencesWith ruleR l1 unify nonVariable
+      rPairs = criticalPairs' ruleR occurencesLinR
+      lPairs = criticalPairs' ruleL occurencesRinL
+      areIdentical (a:<>:b) (c:<>:d) 
+        | a == d && b == c = True
+        | a == c && b == d = True  
+        | otherwise = False 
+
+
+      criticalPairs' :: Rule -> [RuleOccurrence] -> [Critical]
+      criticalPairs' wholeRule@(lhs1 :=>: rhs1) = let 
+          wholeApplication (l :=>: r) (loc,pr,mgu )  = subSet mgu r
+          nestedApplication (l :=>: r) (loc, partialRule@(lp :=>: rp),mgu) = subSet mgu $ applyRule (loc, partialRule, mgu) l
+          pair wholeRule partialOccurence = wholeApplication wholeRule partialOccurence :<>: nestedApplication wholeRule partialOccurence
+            in map (pair wholeRule) 
+
+allCriticalPairs :: [Rule] -> [Critical]
+allCriticalPairs rules = let 
+  double = [criticalPairs r r2 | r2 <- rules , r <- rules ] 
+
+  in concat double 
