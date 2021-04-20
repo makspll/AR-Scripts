@@ -38,7 +38,7 @@ isValidChar :: Char -> Bool
 isValidChar = isAlphaNum
 
 isValidOperator :: Char -> Bool
-isValidOperator c = c `elem` ['+','-','&','|','/','%','@','*','!']
+isValidOperator c = c `elem` ['+','-','&','|','/','%','@','*','!','^']
 
 capital,lower,operator :: ReadP Char
 capital = satisfy (\x -> isValidChar x && isUpper x)
