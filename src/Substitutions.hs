@@ -1,10 +1,8 @@
 
 module Substitutions where
-import Common ( Exp(..) )
+import Common ( Exp(..), Sub ((:\:)) )
 import qualified Data.Set as Set
 import Control.Monad (msum)
-
-data Sub = Exp :\: Exp deriving (Ord, Show, Eq)
 
 
 sub :: Sub -> Exp ->  Exp

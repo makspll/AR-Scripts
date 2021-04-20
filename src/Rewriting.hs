@@ -1,9 +1,15 @@
 module Rewriting where
-import Common (Exp (Var, Lit, Func, Op, UnOp, None))
+import Common
+    ( Exp(UnOp, Op, Func, Lit, Var),
+      Sub(..),
+      Critical(..),
+      Rule(..),
+      RuleOccurrence )
+      
 import Data.List ( sortOn, delete, mapAccumL, nub )
 import Unification (unify)
 import Data.Maybe (isJust, fromJust, catMaybes, mapMaybe)
-import Substitutions (Sub(..), subSet, sub)
+import Substitutions (subSet, sub)
 import qualified Data.Set.Internal as Data
 
 import Debug.Trace ( trace, traceShow )
@@ -16,8 +22,6 @@ import qualified Data.Ord
 traced :: String -> a -> a
 traced a b = b
 
-data Rule =  Exp :=>: Exp
-                deriving (Show,Eq)
 
 
 
@@ -72,7 +76,6 @@ firstIdxb xs _ = firstIdx xs
 
 
 
-type RuleOccurrence = (Int,Rule,Data.Set Sub)
 
 
 -- finds occurence of rule in the given expression given the matching/unification process, excluding certain subexpressions based on filter
@@ -183,18 +186,6 @@ standardizeVariables source target = Data.fromList $ zipWith (\x y -> y:\:x) var
 
 
 
-data Critical = Exp :<>: Exp 
-  deriving (Ord)
-
-instance Show Critical where 
-  show (a :<>: b) = "<" ++ show a ++ "," ++ show b ++ ">"
-
--- commutative equals
-instance Eq Critical where 
-    (a :<>: b) == (c :<>: d) = 
-       a == c && b == d ||
-       a == d && b == c
-
 
 nubCPairs :: [Critical] -> [Critical]
 nubCPairs = nub.filter (\(a:<>:b) -> a /= b)
@@ -209,10 +200,6 @@ criticalPairs ruleL@(l1 :=>: r1 ) ruleR@(l2 :=>: r2) = nubCPairs (lPairs ++ rPai
       occurencesRinL = ruleOccurrencesWith ruleR l1 unify nonVariable
       rPairs = criticalPairs' ruleR occurencesLinR
       lPairs = criticalPairs' ruleL occurencesRinL
-      areIdentical (a:<>:b) (c:<>:d) 
-        | a == d && b == c = True
-        | a == c && b == d = True  
-        | otherwise = False 
 
 
       criticalPairs' :: Rule -> [RuleOccurrence] -> [Critical]
@@ -226,4 +213,4 @@ allCriticalPairs :: [Rule] -> [Critical]
 allCriticalPairs rules = let 
   double = [criticalPairs r r2 | r2 <- rules , r <- rules ] 
 
-  in concat double 
+  in nubCPairs $ concat double 

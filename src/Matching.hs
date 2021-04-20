@@ -1,7 +1,7 @@
 module Matching where
 
-import Substitutions ( Sub(..), sub, mergeSub )
-import Common ( Exp(..) )
+import Substitutions ( sub, mergeSub )
+import Common (Exp (Var, Lit, Func, Op, UnOp, None), Sub ((:\:)))
 import qualified Data.Set as Set
 import Control.Monad ( msum )
 

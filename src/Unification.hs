@@ -2,8 +2,8 @@ module Unification where
     
 import Matching (dPair)
 import qualified Data.Set as Set
-import Common ( Exp(..) )
-import Substitutions ( Sub(..), sub, mergeSub )
+import Common ( Exp(..), Sub ((:\:)) )
+import Substitutions (sub, mergeSub )
 
 
 
