@@ -3,7 +3,7 @@ import Common (Exp (Var, Lit, Func, Op, UnOp, None))
 import Data.List ( sortOn, delete, mapAccumL, nub )
 import Unification (unify)
 import Data.Maybe (isJust, fromJust, catMaybes, mapMaybe)
-import Substitutions (Sub(..), subSet, sub, renameSubs)
+import Substitutions (Sub(..), subSet, sub)
 import qualified Data.Set.Internal as Data
 
 import Debug.Trace ( trace, traceShow )
