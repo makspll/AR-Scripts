@@ -4,7 +4,7 @@ import Common
       Sub(..),
       Critical(..),
       Rule(..),
-      RuleOccurrence, getMGU )
+      RuleOccurrence, getMGU, getRule )
 
 import Data.List ( sortOn, delete, mapAccumL, nub )
 import Unification (unify)
@@ -193,15 +193,15 @@ criticalPairs ruleL@(l1 :=>: r1 ) ruleR@(l2 :=>: r2) = nubCPairs (lPairs ++ rPai
       nonVariable i _ = True
       occurencesLinR = ruleOccurrencesWith ruleL l2 unify nonVariable
       occurencesRinL = ruleOccurrencesWith ruleR l1 unify nonVariable
-      rPairs = map (\(x,mgu) -> (x,(ruleR,ruleL),mgu)) $ criticalPairs' ruleR occurencesLinR
-      lPairs = map (\(x,mgu) -> (x,(ruleL,ruleR),mgu)) $ criticalPairs' ruleL occurencesRinL
+      rPairs = criticalPairs' ruleR occurencesLinR
+      lPairs = criticalPairs' ruleL occurencesRinL
 
 
-      criticalPairs' :: Rule -> [RuleOccurrence] -> [(Critical,Data.Set Sub)]
+      criticalPairs' :: Rule -> [RuleOccurrence] -> [(Critical,(Rule,Rule),Data.Set Sub)]
       criticalPairs' wholeRule@(lhs1 :=>: rhs1) = let
           wholeApplication (l :=>: r) (loc,pr,mgu )  = subSet mgu r
           nestedApplication (l :=>: r) (loc, partialRule@(lp :=>: rp),mgu) = subSet mgu $ applyRule (loc, partialRule, mgu) l
-          pair wholeRule partialOccurence = (wholeApplication wholeRule partialOccurence :<>: nestedApplication wholeRule partialOccurence, getMGU partialOccurence)
+          pair wholeRule partialOccurence = (wholeApplication wholeRule partialOccurence :<>: nestedApplication wholeRule partialOccurence,(wholeRule, getRule partialOccurence) , getMGU partialOccurence)
             in map (pair wholeRule)
 
 allCriticalPairs :: [Rule] -> [(Critical,(Rule,Rule),Data.Set Sub)]
