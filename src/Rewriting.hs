@@ -4,8 +4,8 @@ import Common
       Sub(..),
       Critical(..),
       Rule(..),
-      RuleOccurrence )
-      
+      RuleOccurrence, getMGU )
+
 import Data.List ( sortOn, delete, mapAccumL, nub )
 import Unification (unify)
 import Data.Maybe (isJust, fromJust, catMaybes, mapMaybe)
@@ -141,13 +141,13 @@ factor1 = (read "X & (Y | Z)" :: Exp) :=>:  (read "(X & Y) | (X & Z)" :: Exp)
 demoivre :: Rule
 demoivre = (read "-(X & Y)" :: Exp) :=>: (read "-X | -Y" :: Exp)
 
-power :: Rule 
+power :: Rule
 power = (read "X^0" :: Exp) :=>: (read "1" :: Exp)
 
-power2 :: Rule 
+power2 :: Rule
 power2 = (read "0^X" :: Exp) :=>: (read "0" :: Exp)
 
-frule :: Rule 
+frule :: Rule
 frule = (read "f(f(X))" :: Exp) :=>: (read "g(X)" :: Exp)
 
 
@@ -183,30 +183,29 @@ standardizeVariables source target = Data.fromList $ zipWith (\x y -> y:\:x) var
 
 
 
-nubCPairs :: [Critical] -> [Critical]
-nubCPairs = nub.filter (\(a:<>:b) -> a /= b)
+nubCPairs :: [(Critical,(Rule,Rule),Data.Set Sub)] -> [(Critical,(Rule,Rule),Data.Set Sub)]
+nubCPairs = nub.filter (\(a:<>:b,_,_) -> a /= b)
 
-criticalPairs :: Rule -> Rule -> [Critical]
+criticalPairs :: Rule -> Rule -> [(Critical,(Rule,Rule),Data.Set Sub)]
 criticalPairs ruleL@(l1 :=>: r1 ) ruleR@(l2 :=>: r2) = nubCPairs (lPairs ++ rPairs)
-    where 
-      nonVariable i (Var x) = False 
-      nonVariable i _ = True 
-
+    where
+      nonVariable i (Var x) = False
+      nonVariable i _ = True
       occurencesLinR = ruleOccurrencesWith ruleL l2 unify nonVariable
       occurencesRinL = ruleOccurrencesWith ruleR l1 unify nonVariable
-      rPairs = criticalPairs' ruleR occurencesLinR
-      lPairs = criticalPairs' ruleL occurencesRinL
+      rPairs = map (\(x,mgu) -> (x,(ruleR,ruleL),mgu)) $ criticalPairs' ruleR occurencesLinR
+      lPairs = map (\(x,mgu) -> (x,(ruleL,ruleR),mgu)) $ criticalPairs' ruleL occurencesRinL
 
 
-      criticalPairs' :: Rule -> [RuleOccurrence] -> [Critical]
-      criticalPairs' wholeRule@(lhs1 :=>: rhs1) = let 
+      criticalPairs' :: Rule -> [RuleOccurrence] -> [(Critical,Data.Set Sub)]
+      criticalPairs' wholeRule@(lhs1 :=>: rhs1) = let
           wholeApplication (l :=>: r) (loc,pr,mgu )  = subSet mgu r
           nestedApplication (l :=>: r) (loc, partialRule@(lp :=>: rp),mgu) = subSet mgu $ applyRule (loc, partialRule, mgu) l
-          pair wholeRule partialOccurence = wholeApplication wholeRule partialOccurence :<>: nestedApplication wholeRule partialOccurence
-            in map (pair wholeRule) 
+          pair wholeRule partialOccurence = (wholeApplication wholeRule partialOccurence :<>: nestedApplication wholeRule partialOccurence, getMGU partialOccurence)
+            in map (pair wholeRule)
 
-allCriticalPairs :: [Rule] -> [Critical]
-allCriticalPairs rules = let 
-  double = [criticalPairs r r2 | r2 <- rules , r <- rules ] 
+allCriticalPairs :: [Rule] -> [(Critical,(Rule,Rule),Data.Set Sub)]
+allCriticalPairs rules = let
+  double = [criticalPairs r r2 | r2 <- rules , r <- rules ]
 
-  in nubCPairs $ concat double 
+  in nubCPairs $ concat double

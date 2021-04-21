@@ -1,12 +1,28 @@
 import System.Directory.Internal.Prelude (getArgs, fromMaybe)
 import Data.List.Split ( splitOn )
-import Common ( Option(Unify,Match, CriticalPairs, Error, Normalize), parser, Rule, RuleOccurrence, Exp, getRule, getPos)
+import Common ( Option(Unify,Match, CriticalPairs, Error, Normalize), parser, Rule ((:=>:)), RuleOccurrence, Exp, getRule, getPos, Critical, Sub)
 import Unification(unify)
 import Matching(match)
 import Text.Printf (printf)
 import Rewriting (criticalPairs, allCriticalPairs, reduceToNormal, applyRule)
 import Data.Set (toList, fromList)
+import qualified Data.Set as Data
 
+
+
+processMGU :: Data.Set Sub -> String 
+processMGU = show.toList  
+
+processMGUMaybe :: Maybe (Data.Set Sub) -> String 
+processMGUMaybe = processMGU.fromMaybe  (fromList []) 
+
+processCritical :: [(Critical, (Rule,Rule),Data.Set Sub)] -> String
+processCritical xs = let
+
+                    
+                    processCritical' :: (Critical, (Rule,Rule),Data.Set Sub) -> String
+                    processCritical' (e,(rule1@(l1 :=>: r1),rule2@(l2 :=>: r2)),mgu) = printf "\nPair:{%s}\nAssignments:\n{\nWhole Rule:%s\nSub Rule:%s\nMGU:%s\n}" (show e) (show rule1) (show rule2) (processMGU mgu)
+                    in concatMap processCritical' xs
 
 
 
@@ -21,22 +37,22 @@ processNormal xs = let
                             in (soFar ++ "\n > " ++ show (getRule nRuleOccurence) ++ printf " at pos %s" (show $ getPos nRuleOccurence) ++ " > " ++ show reduced ,reduced)
 
                     processNormal' :: (Exp, [RuleOccurrence]) -> String
-                    processNormal' (e,rules) = printf "\n Form:\n {%s}, \nSteps:\n{%s\n}" (show e) $ fst (foldl folder ("",e) rules)
+                    processNormal' (e,rules) = printf "\nForm:{%s}\nSteps:\n{%s\n}" (show e) $ fst (foldl folder ("",e) rules)
                     in concatMap processNormal' xs
 
 process :: Option -> String
-process (Unify a b) = printf "Unify {%s , %s}: %s \n" (show a) (show b) (show.toList $ fromMaybe  (fromList []) (unify a b))
-process (Match a b) = printf "Match {%s -> %s}: %s \n" (show a) (show b) (show.toList $ fromMaybe  (fromList []) (match a b))
+process (Unify a b) = printf "Unify {%s , %s}: %s \n" (show a) (show b) (processMGUMaybe (unify a b))
+process (Match a b) = printf "Match {%s -> %s}: %s \n" (show a) (show b) (processMGUMaybe (match a b))
 process (CriticalPairs xs) =
     let
         args =  foldl (\acc x -> acc ++ "\n" ++ show x) "" xs
-        out = foldl (\acc x -> acc ++ "\n" ++ show x ++",") "[" (allCriticalPairs xs) ++ "\n]"
+        out =  "["  ++ processCritical (allCriticalPairs xs) ++ "\n]"
     in printf "CriticalPairs {%s \n}: %s \n" args out
 process (Normalize xs e) =
     let
         args =  foldl (\acc x -> acc ++ "\n" ++ show x) "" xs
         out = "["++ processNormal (reduceToNormal xs e) ++ "\n]"
-    in printf "NormalForms {%s \n applied to \n %s }: %s \n" args (show e) out
+    in printf "NormalForms {%s \n applied to \n%s }: %s \n" args (show e) out
 process _ = "Error in parsing or wrong arguments"
 
 

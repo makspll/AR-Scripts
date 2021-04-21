@@ -28,7 +28,8 @@ getPos :: RuleOccurrence -> Int
 getPos (a,b,c) = a 
 getRule :: RuleOccurrence -> Rule
 getRule (a,b,c) = b
-
+getMGU :: RuleOccurrence -> Data.Set Sub 
+getMGU (a,b,c) = c
 
 data Rule =  Exp :=>: Exp
                 deriving (Show,Eq)
