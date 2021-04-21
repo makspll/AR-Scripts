@@ -10,18 +10,21 @@ import qualified Data.Set as Data
 
 
 
-processMGU :: Data.Set Sub -> String 
-processMGU = show.toList  
+indent :: String -> Int -> String
+indent s i = foldl (\acc n -> if n == '\n' then acc ++ "\n" ++ replicate i '\t'  else acc ++ [n]) "" s
 
-processMGUMaybe :: Maybe (Data.Set Sub) -> String 
-processMGUMaybe = processMGU.fromMaybe  (fromList []) 
+processMGU :: Data.Set Sub -> String
+processMGU = show.toList
+
+processMGUMaybe :: Maybe (Data.Set Sub) -> String
+processMGUMaybe = processMGU.fromMaybe  (fromList [])
 
 processCritical :: [(Critical, (Rule,Rule),Data.Set Sub)] -> String
 processCritical xs = let
 
-                    
+
                     processCritical' :: (Critical, (Rule,Rule),Data.Set Sub) -> String
-                    processCritical' (e,(rule1@(l1 :=>: r1),rule2@(l2 :=>: r2)),mgu) = printf "\nPair:{%s}\nAssignments:\n{\nWhole Rule:%s\nSub Rule:%s\nMGU:%s\n}" (show e) (show rule1) (show rule2) (processMGU mgu)
+                    processCritical' (e,(rule1@(l1 :=>: r1),rule2@(l2 :=>: r2)),mgu) = printf "\nPair:{%s}\nAssignments:\n{\n\tWhole Rule:%s\n\tSub Rule:%s\n\tMGU:%s\n}" (show e) (show rule1) (show rule2) (processMGU mgu)
                     in concatMap processCritical' xs
 
 
@@ -34,7 +37,7 @@ processNormal xs = let
                         | getPos nRuleOccurence == -1 = (soFar,lastExp)
                         | otherwise =  let
                             reduced = applyRule nRuleOccurence lastExp
-                            in (soFar ++ "\n > " ++ show (getRule nRuleOccurence) ++ printf " at pos %s" (show $ getPos nRuleOccurence) ++ " > " ++ show reduced ,reduced)
+                            in (soFar ++ "\n\t > " ++ show (getRule nRuleOccurence) ++ printf " at pos %s" (show $ getPos nRuleOccurence) ++ " > " ++ show reduced ,reduced)
 
                     processNormal' :: (Exp, [RuleOccurrence]) -> String
                     processNormal' (e,rules) = printf "\nForm:{%s}\nSteps:\n{%s\n}" (show e) $ fst (foldl folder ("",e) rules)
@@ -46,13 +49,13 @@ process (Match a b) = printf "Match {%s -> %s}: %s \n" (show a) (show b) (proces
 process (CriticalPairs xs) =
     let
         args =  foldl (\acc x -> acc ++ "\n" ++ show x) "" xs
-        out =  "["  ++ processCritical (allCriticalPairs xs) ++ "\n]"
-    in printf "CriticalPairs {%s \n}: %s \n" args out
+        out =  "["  ++ indent (processCritical (allCriticalPairs xs)) 2 ++ "\n]"
+    in printf "CriticalPairs {%s \n}%s\n" (indent args 1 ) out
 process (Normalize xs e) =
     let
         args =  foldl (\acc x -> acc ++ "\n" ++ show x) "" xs
-        out = "["++ processNormal (reduceToNormal xs e) ++ "\n]"
-    in printf "NormalForms {%s \n applied to \n%s }: %s \n" args (show e) out
+        out = "["++ indent ( processNormal (reduceToNormal xs e)) 2 ++ "\n]"
+    in printf "NormalForms {%s\n\n\tapplied to %s\n}%s\n" (indent args 1) (indent (show e) 1) out
 process _ = "Error in parsing or wrong arguments"
 
 
