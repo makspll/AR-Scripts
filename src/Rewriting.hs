@@ -19,10 +19,6 @@ import Data.Char (isDigit)
 import qualified Data.Ord
 
 
-traced :: String -> a -> a
-traced a b = b
-
-
 
 
 dfsFold :: (Int -> Exp -> c -> c) -> c -> Exp -> c
