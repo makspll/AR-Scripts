@@ -23,6 +23,13 @@ data Sub = Exp :\: Exp deriving (Ord, Show, Eq)
 
 type RuleOccurrence = (Int,Rule,Data.Set Sub)
 
+
+getPos :: RuleOccurrence -> Int
+getPos (a,b,c) = a 
+getRule :: RuleOccurrence -> Rule
+getRule (a,b,c) = b
+
+
 data Rule =  Exp :=>: Exp
                 deriving (Show,Eq)
 
@@ -48,6 +55,7 @@ showArgs' (x:xs) [] = showArgs' xs (show x)
 showArgs' xs s = foldl (\ s x -> printf "%s,%s" s (show x)) s xs
 
 instance Show Exp where
+    show None = " "
     show (Var a) = a
     show (Lit a) = a
     show (Func a b) = printf "%s(%s)" a (showArgs b)

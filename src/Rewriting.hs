@@ -1,6 +1,6 @@
 module Rewriting where
 import Common
-    ( Exp(UnOp, Op, Func, Lit, Var),
+    ( Exp(UnOp, Op, Func, Lit, Var, None),
       Sub(..),
       Critical(..),
       Rule(..),
@@ -125,17 +125,17 @@ heuristic = sortOn (\(a,b,c) -> a)
 
 
 
-reduceToNormal :: [Rule] -> Exp -> [Exp]
-reduceToNormal r e= nub (reduceToNormal' r e)
+reduceToNormal :: [Rule] -> Exp -> [(Exp,[RuleOccurrence] )]
+reduceToNormal r e= nub (reduceToNormal' r e [])
 
-reduceToNormal' :: [Rule] -> Exp -> [Exp]
-reduceToNormal' rules e =
+reduceToNormal' :: [Rule] -> Exp -> [RuleOccurrence] -> [(Exp,[RuleOccurrence])]
+reduceToNormal' rules e xs =
         let
             choices =  allOccurrences rules e
         in
         case choices of
-            [] -> [e]
-            _ -> foldl (\acc n ->  acc ++ reduceToNormal' rules (applyRule n e)) [] (heuristic choices)
+            [] -> [(e,xs ++ [(-1,None :=>: None,Data.fromList [])])]
+            _ -> foldl (\acc n ->  acc ++ reduceToNormal' rules (applyRule n e) (xs ++ [n])) [] (heuristic choices)
 
 --traceShow ("<",e,"|||",applyRule3 n e,"|||",n,">") 
 
